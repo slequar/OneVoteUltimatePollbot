@@ -1,16 +1,17 @@
 # Token = 850280100:AAECV30SkFq8wsUMrQd2NPnbjMdabr9ZuMk
 
 import telegram
-import sys, os
+import sys, os, logging
 
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InlineQueryResultDocument, InputTextMessageContent
 from telegram.ext import *
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 
 class OVPoll():
     '''The One-Vote Poll class'''
-    def __init__(self):
+    def __init__(self, owner):
         self.options = []
+        self.owner = owner
         self.question = ''
         self.answer = None
         self.done = False
@@ -40,16 +41,16 @@ class OVPoll():
         return text_poll
 
     def generate_markdown_poll(self):
-        buttons = [[InlineKeyboardButton(option, callback_data=i+1)] for i, option
+        buttons = [[InlineKeyboardButton(option, callback_data=str([self.owner,i+1]))] for i, option
                     in enumerate(self.options)]
         print('button1')
-        buttons = [[InlineKeyboardButton("Share Poll", switch_inline_query="")] for i, option
-                    in enumerate(self.options)]
-        print('button2')
+        # buttons = [[InlineKeyboardButton("Share Poll", switch_inline_query="")] for i, option
+        #             in enumerate(self.options)]
+        # print('button2')
         return InlineKeyboardMarkup(buttons)
 
-    def markdown_options(self):
-        return InlineKeyboardMarkup([[InlineKeyboardButton(text="Send Poll", switch_inline_query=")]])
+    def sending_options(self):
+        return InlineKeyboardMarkup([[InlineKeyboardButton(text="Send Poll", switch_inline_query=self.question)]])
 
 
 
@@ -59,8 +60,10 @@ def start(update, context):
     # keyboard = [[InlineKeyboardButton("Option 1", callback_data='1'),
     #              InlineKeyboardButton("Option 2", callback_data='2')],
     #
-    #             [InlineKeyboardButton("Option 3", callback_data='3')]]
-    # keyboard = [[InlineKeyboardButton(i, callback_data=i)] for i in range(1,4)]
+    #             [InlineKeyboardButton("Option 3", callback_data='3')],
+    #             [InlineKeyboardButton("Share Poll", switch_inline_query=" ")]]
+    #
+    # # keyboard = [[InlineKeyboardButton(i, callback_data=i)] for i in range(1,4)]
     #
     # reply_markup = InlineKeyboardMarkup(keyboard)
     #
@@ -69,16 +72,16 @@ def start(update, context):
         pass
 
 
-
 def new_poll(update, context):
     print("newpoll1")
-    context.user_data['ovpoll'] = OVPoll()
+    user_polls[update.effective_user.id] = OVPoll(update.effective_user.id)
     update.message.reply_text('Send me the question for your poll')
+
 
 def message(update, context):
     print("we got messaggg")
     try:
-        poll = context.user_data['ovpoll']
+        poll = user_polls[update.effective_user.id]
         print(type(poll))
     except KeyError as e:
         print("keyerror")
@@ -96,22 +99,33 @@ def message(update, context):
             poll.add_option(update.message.text)
             update.message.reply_text('Send me another option for the poll or /done to end')
 
+
 def vote(update, context):
     print("voting")
-    poll = update.callback_query['message']['text'].split('\n')
-    index = int(update.callback_query['data'])+1
-
-    final_poll = '\n'.join(poll[:2]) + '\n>>> ' + poll[index][2:]
-    for i in poll[2:]:
-        if i != poll[index]:
-            final_poll += '\n' + i
-    update.callback_query.edit_message_text(final_poll)
+    # print(update)
+    # print()
+    # print(update.callback_query)
+    a = eval(update.callback_query['data'])
+    # print(a)
+    try:
+        poll = user_polls[a[0]]
+    except KeyError as e:
+        return
+    text_poll = poll.generate_text_poll().split('\n')
+    index = a[1] + 1
+    if(text_poll[0] == "One Vote Ultimate Poll:"):
+        final_poll = '\n'.join(text_poll[:2]) + '\n>>> ' + text_poll[index][2:]
+        for i in text_poll[2:]:
+            if i != text_poll[index]:
+                final_poll += '\n' + i
+        print("here")
+        update.callback_query.edit_message_text(final_poll)
 
 
 def done(update, context):
     print("done1")
     try:
-        poll = context.user_data['ovpoll']
+        poll = user_polls[update.effective_user.id]
     except KeyError as e:
         return
 
@@ -119,10 +133,29 @@ def done(update, context):
     if poll.is_valid():
         print("finish Him")
         poll.finish()
-        temp = update.message.reply_text(poll.generate_text_poll(), reply_markup=poll.generate_markdown_poll())
+        temp = update.message.reply_text(poll.generate_text_poll(), reply_markup=poll.sending_options())
         #update.message.reply_markdown(poll.generate_markdown_poll())
         #temp.edit_reply_markup(poll.generate_markdown_poll())
         print("done3")
+
+
+def sending(update, context):
+    print("sending")
+    print(type(context))
+    try:
+        poll = user_polls[update.effective_user.id]
+        print(poll.question)
+        print(type(poll))
+    except KeyError as e:
+        print("keyerror")
+        return
+    context.bot.answer_inline_query(update.inline_query.id,
+        [InlineQueryResultDocument(1, "https://t.me/69", poll.question, 'application/pdf',
+        input_message_content=InputTextMessageContent(poll.generate_text_poll()),
+        reply_markup=poll.generate_markdown_poll())])
+
+
+
 
 
 
@@ -136,12 +169,19 @@ def main():
 
     updater.dispatcher.add_handler(MessageHandler(Filters.text, message))
     updater.dispatcher.add_handler(CallbackQueryHandler(vote))
+    updater.dispatcher.add_handler(InlineQueryHandler(sending))
+
+    logging.basicConfig(
+        filename="data/bot.log",
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        level=logging.INFO) # not sure exactly how this works
 
 
     updater.start_polling()
     print("bot started")
     updater.idle()
 
+user_polls = {}
 
 if __name__ == "__main__":
     main()
