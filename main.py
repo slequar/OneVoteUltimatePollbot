@@ -88,24 +88,6 @@ def new_poll(update, context):
     temp = update.message.reply_text('Send me the question for your poll')
 
 
-def message(update, context):
-    '''Responds only to messages in the creation process'''
-    user = update.effective_user.id
-    try:
-        polls = user_polls[user]
-        poll = polls[polls['current']]
-    except KeyError as e:
-        return
-
-    if not(poll.is_done()):
-        if poll.question == '':
-            poll.set_question(update.message.text)
-            update.message.reply_text('Send me an option for the poll')
-        else:
-            poll.add_option(update.message.text)
-            update.message.reply_text('Send me another option for the poll, /done to end, or /cancel to cancel')
-
-
 def done(update, context):
     '''This command finishes the creation of a poll if it is valid'''
     user = update.effective_user.id
@@ -135,6 +117,28 @@ def cancel(update, context):
         pass
 
 
+# -----------
+# Handling the rest of the Telegram events
+# -----------
+
+def message(update, context):
+    '''Responds only to messages in the creation process'''
+    user = update.effective_user.id
+    try:
+        polls = user_polls[user]
+        poll = polls[polls['current']]
+    except KeyError as e:
+        return
+
+    if not(poll.is_done()):
+        if poll.question == '':
+            poll.set_question(update.message.text)
+            update.message.reply_text('Send me an option for the poll')
+        else:
+            poll.add_option(update.message.text)
+            update.message.reply_text('Send me another option for the poll, /done to end, or /cancel to cancel')
+
+
 def vote(update, context):
     '''
     This function runs when a vote is cast by hitting the appropriate button in
@@ -159,7 +163,7 @@ def vote(update, context):
         update.callback_query.edit_message_text(final_poll)
 
 
-def sending(update, context):
+def send_inline(update, context):
     '''This function handles sending polls through inline queries'''
     user = update.effective_user.id
     try:
@@ -204,7 +208,7 @@ def main():
 
     updater.dispatcher.add_handler(MessageHandler(Filters.text, message))
     updater.dispatcher.add_handler(CallbackQueryHandler(vote))
-    updater.dispatcher.add_handler(InlineQueryHandler(sending))
+    updater.dispatcher.add_handler(InlineQueryHandler(send_inline))
 
     logging.basicConfig(
         filename="data/bot.log",
