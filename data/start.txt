@@ -1,0 +1,1 @@
+Welcome to OneVoteUltimatePollbot! This bot creates polls that close after a single vote is cast. Send /newpoll to get started. 
